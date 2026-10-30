@@ -233,7 +233,9 @@ fn open_region_file_for_merge(
 ) -> Result<Region<File>, Box<dyn std::error::Error + Send + Sync>> {
     let region_dir = overworld_dir.join("region");
     let out_path = region_dir.join(format!("r.{}.{}.mca", region_x, region_z));
-    if out_path.is_file() {
+    // A zero-length file is what an interrupted run leaves behind: no chunks to lose, so it
+    // is recreated below instead of refused.
+    if out_path.is_file() && std::fs::metadata(&out_path).is_ok_and(|m| m.len() > 0) {
         let file = File::options().read(true).write(true).open(&out_path)?;
         // Refused rather than replaced: the file holds chunks of other areas.
         return Region::from_stream(file).map_err(|e| {

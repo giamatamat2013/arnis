@@ -1670,6 +1670,10 @@ fn gui_start_generation(
                 osm_tiles_url: crate::osm_tiles::DEFAULT_OSM_TILES_URL.to_string(),
                 no_tile_archive: false,
                 use_3d: use_3d_enabled,
+                // A CLI feature: the files are downloaded by hand and passed by path.
+                city_model: None,
+                city_model_crs: None,
+                city_model_yup: false,
                 debug: false,
                 timeout: Some(std::time::Duration::from_secs(40)),
                 spawn_lat: None,

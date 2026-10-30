@@ -183,6 +183,23 @@ pub struct Args {
     #[arg(long = "no-3d", default_value_t = true, action = ArgAction::SetFalse)]
     pub use_3d: bool,
 
+    /// Real 3D city model to build from instead of the OpenStreetMap buildings it covers:
+    /// a file or a folder of CityJSON (.json/.jsonl, e.g. 3D BAG), CityGML (.gml/.xml, e.g.
+    /// German LoD2, NYC, Helsinki) or OBJ files. Walls, roofs and heights follow the real
+    /// buildings. Needs 3D models on (the default).
+    #[arg(long = "city-model", value_name = "PATH")]
+    pub city_model: Option<PathBuf>,
+
+    /// Coordinate system of the city model as an EPSG code (for example EPSG:25832), when the
+    /// files do not name one. Always needed for OBJ. Supported: WGS84, Web Mercator, UTM and
+    /// ETRS89 zones, Dutch RD (28992/7415) and NY Long Island (2263).
+    #[arg(long = "city-model-crs", value_name = "EPSG")]
+    pub city_model_crs: Option<String>,
+
+    /// The OBJ files of --city-model have Y up instead of Z up.
+    #[arg(long = "city-model-yup", default_value_t = false)]
+    pub city_model_yup: bool,
+
     /// Enable debug mode (optional)
     #[arg(long)]
     pub debug: bool,
@@ -859,6 +876,15 @@ pub fn validate_args(args: &Args) -> Result<(), String> {
     }
     if args.body_gravity && args.body.is_earth() {
         return Err("--body-gravity only applies to --body moon or --body mars.".to_string());
+    }
+
+    if let Some(path) = &args.city_model {
+        if !path.exists() {
+            return Err(format!("--city-model: {} does not exist.", path.display()));
+        }
+    }
+    if let Some(crs) = &args.city_model_crs {
+        crate::models_3d::city_models::crs::crs_from_arg(crs)?;
     }
 
     if args.map_preview && args.luanti {

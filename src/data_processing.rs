@@ -1310,7 +1310,13 @@ pub fn generate_world_with_options(
     // 3D model pipeline pre-scan: elements rendered as 3D models instead of
     // voxels are recorded here and skipped by the element loop below.
     let models_3d_pipeline = args.use_3d.then(|| {
-        crate::models_3d::Models3dPipeline::prescan(&elements, args, landmarks.suppressed())
+        crate::models_3d::Models3dPipeline::prescan(
+            &elements,
+            args,
+            landmarks.suppressed(),
+            llbbox,
+            &xzbbox,
+        )
     });
     let empty_suppressed: HashSet<(&'static str, u64)> = HashSet::new();
     let models_3d_suppressed: &HashSet<(&'static str, u64)> = models_3d_pipeline
