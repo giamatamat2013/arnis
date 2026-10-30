@@ -94,6 +94,50 @@ impl Crs {
     }
 }
 
+impl Crs {
+    /// Inverse of [`Crs::to_lonlat`] for the projected systems, found by Newton iteration on
+    /// the forward conversion (a few metres of start error converge in three or four steps).
+    pub fn from_lonlat(&self, lon: f64, lat: f64) -> (f64, f64) {
+        let mut p = match *self {
+            Crs::Geographic { lat_first } => return if lat_first { (lat, lon) } else { (lon, lat) },
+            Crs::WebMercator => {
+                let x = WGS84_A * lon.to_radians();
+                let y = WGS84_A * (PI / 4.0 + lat.to_radians() / 2.0).tan().ln();
+                return (x, y);
+            }
+            Crs::Utm { zone, north } => {
+                let lon0 = f64::from(zone) * 6.0 - 183.0;
+                let y = lat * 110_574.0;
+                (
+                    500_000.0 + (lon - lon0) * 111_320.0 * lat.to_radians().cos(),
+                    if north { y } else { y + 10_000_000.0 },
+                )
+            }
+            Crs::AmersfoortRd => (155_000.0, 463_000.0),
+            Crs::NyLongIslandFt => (984_250.0, 207_000.0),
+        };
+        for _ in 0..8 {
+            let (lo, la) = self.to_lonlat(p.0, p.1);
+            let (dlon, dlat) = (lon - lo, lat - la);
+            if dlon.abs() < 1e-10 && dlat.abs() < 1e-10 {
+                break;
+            }
+            // Local metres per degree from a 1 m step, in the system's own unit.
+            let h = 1.0;
+            let (lx, ly) = self.to_lonlat(p.0 + h, p.1);
+            let (ux, uy) = self.to_lonlat(p.0, p.1 + h);
+            let (a, b, c, d) = (lx - lo, ux - lo, ly - la, uy - la);
+            let det = a * d - b * c;
+            if det.abs() < 1e-30 {
+                break;
+            }
+            p.0 += (dlon * d - b * dlat) / det * h;
+            p.1 += (a * dlat - c * dlon) / det * h;
+        }
+        p
+    }
+}
+
 /// Reads the EPSG number out of `EPSG:7415`, `urn:ogc:def:crs:EPSG::25832`,
 /// `https://www.opengis.net/def/crs/EPSG/0/7415` and compound forms like `EPSG:7415+...`.
 pub fn parse_epsg(text: &str) -> Option<u32> {
@@ -283,6 +327,28 @@ mod tests {
             (lat - 40.748).abs() < 0.01 && (lon + 73.986).abs() < 0.01,
             "{lat} {lon}"
         );
+    }
+
+    #[test]
+    fn from_lonlat_round_trips() {
+        let cases = [
+            (Crs::AmersfoortRd, 4.9, 52.37),
+            (
+                Crs::Utm {
+                    zone: 32,
+                    north: true,
+                },
+                6.96,
+                50.94,
+            ),
+            (Crs::NyLongIslandFt, -73.98, 40.75),
+            (Crs::WebMercator, 13.4, 52.5),
+        ];
+        for (crs, lon, lat) in cases {
+            let (x, y) = crs.from_lonlat(lon, lat);
+            let (lo, la) = crs.to_lonlat(x, y);
+            assert!((lo - lon).abs() < 1e-7 && (la - lat).abs() < 1e-7, "{crs:?}");
+        }
     }
 
     #[test]

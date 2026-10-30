@@ -180,7 +180,17 @@ fn resolve_crs(named: Option<&str>, opts: LoadOptions) -> Result<Crs, String> {
     let text = named.ok_or("the file names no coordinate system; pass --city-model-crs")?;
     parse_epsg(text)
         .and_then(Crs::from_epsg)
+        .or_else(|| utm_zone_in_name(text))
         .ok_or_else(|| unsupported_crs(text))
+}
+
+/// German AdV names such as `urn:adv:crs:ETRS89_UTM32*DE_DHHN2016_NH` carry the UTM zone only.
+fn utm_zone_in_name(text: &str) -> Option<Crs> {
+    let upper = text.to_ascii_uppercase();
+    let after = &upper[upper.find("UTM")? + 3..];
+    let digits: String = after.chars().take_while(char::is_ascii_digit).collect();
+    let zone: u8 = digits.parse().ok()?;
+    (1..=60).contains(&zone).then_some(Crs::Utm { zone, north: true })
 }
 
 fn parse_cityjson(text: &str, opts: LoadOptions) -> Result<Vec<Loaded>, String> {

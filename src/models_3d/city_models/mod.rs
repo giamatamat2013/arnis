@@ -4,6 +4,7 @@
 //! vertex is projected to the world, so walls, roofs and heights follow the real building.
 
 pub(crate) mod crs;
+pub(crate) mod fetch;
 pub(crate) mod parse;
 pub(crate) mod triangulate;
 
@@ -135,9 +136,14 @@ pub fn prescan(
     xzbbox: &XZBBox,
     args: &Args,
 ) -> PrescanResult {
-    let Some(path) = args.city_model.as_ref() else {
-        return PrescanResult::empty();
+    // A model given by hand wins; otherwise the open data for the area is downloaded.
+    let paths: Vec<std::path::PathBuf> = match args.city_model.as_ref() {
+        Some(p) => vec![p.clone()],
+        None => fetch::models_for(&llbbox),
     };
+    if paths.is_empty() {
+        return PrescanResult::empty();
+    }
     let forced = match crs_option(args) {
         Ok(c) => c,
         Err(e) => {
@@ -153,24 +159,20 @@ pub fn prescan(
         return PrescanResult::empty();
     };
 
-    println!(
-        "{} Reading city model {}...",
-        "  [+]".bold(),
-        path.display()
-    );
-    let loaded = match parse::load_path(
-        path,
-        LoadOptions {
-            crs: forced,
-            y_up: args.city_model_yup,
-        },
-    ) {
-        Ok(l) => l,
-        Err(e) => {
-            eprintln!("{} city model: {e}", "Warning:".yellow().bold());
-            return PrescanResult::empty();
+    println!("{} Reading city models...", "  [+]".bold());
+    let mut loaded = Vec::new();
+    for path in &paths {
+        match parse::load_path(
+            path,
+            LoadOptions {
+                crs: forced,
+                y_up: args.city_model_yup,
+            },
+        ) {
+            Ok(mut l) => loaded.append(&mut l),
+            Err(e) => eprintln!("{} city model: {e}", "Warning:".yellow().bold()),
         }
-    };
+    }
 
     // Margin around the area, so a building that straddles the edge still counts.
     let margin = 0.01;

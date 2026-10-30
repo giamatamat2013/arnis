@@ -119,6 +119,7 @@ pub fn model_cache_roots() -> Vec<std::path::PathBuf> {
         three_dmr::client::cache_root(),
         wikidata::client::cache_root(),
         custom::client::cache_root(),
+        city_models::fetch::cache_root(),
     ]
 }
 
@@ -127,4 +128,5 @@ pub fn clear_model_caches() -> CacheClearStats {
     clear_cache_dir(&three_dmr::client::cache_root())
         .combined(clear_cache_dir(&wikidata::client::cache_root()))
         .combined(clear_cache_dir(&custom::client::cache_root()))
+        .combined(clear_cache_dir(&city_models::fetch::cache_root()))
 }
