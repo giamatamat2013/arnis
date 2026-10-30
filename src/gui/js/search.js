@@ -53,7 +53,18 @@ var citySearch = {
         if (query.length < 2) {
             return;
         }
-        
+
+        // A pasted Google Maps link or plain coordinates skips the geocoder.
+        var parsed = this.parseMapsInput(query);
+        if (parsed) {
+            if (parsed.lat !== undefined) {
+                this.hideResults();
+                this.goToLocation(parsed.lat, parsed.lon, '');
+                return;
+            }
+            query = parsed.name;
+        }
+
         // Abort any in-flight request so stale responses never overwrite fresh ones
         if (self.activeRequest) {
             self.activeRequest.abort();
@@ -97,6 +108,44 @@ var citySearch = {
         });
     },
     
+    // Returns {lat, lon} for a Google Maps link or "lat, lon" text, {name} for a link that only
+    // carries a place name, or null for ordinary search text.
+    parseMapsInput: function(text) {
+        var num = '(-?\\d{1,3}(?:\\.\\d+)?)';
+        var valid = function(lat, lon) {
+            lat = parseFloat(lat);
+            lon = parseFloat(lon);
+            return Math.abs(lat) <= 90 && Math.abs(lon) <= 180 ? { lat: lat, lon: lon } : null;
+        };
+        var m = text.match(new RegExp('^' + num + '\\s*[,; ]\\s*' + num + '$'));
+        if (m) return valid(m[1], m[2]);
+
+        if (!/^(https?:\/\/)?([\w-]+\.)*(google\.[a-z.]+\/maps|goo\.gl|maps\.app\.goo\.gl)/i.test(text)) {
+            return null;
+        }
+
+        var decoded = text;
+        try { decoded = decodeURIComponent(text); } catch (e) {}
+        var patterns = [
+            '!3d' + num + '!4d' + num,                      // the pinned place itself
+            '@' + num + ',' + num,                          // map centre
+            '[?&](?:q|ll|query|center|destination)=' + num + '[, ]\\s*' + num
+        ];
+        for (var i = 0; i < patterns.length; i++) {
+            m = decoded.match(new RegExp(patterns[i]));
+            if (m) {
+                var r = valid(m[1], m[2]);
+                if (r) return r;
+            }
+        }
+
+        m = decoded.match(/\/maps\/place\/([^\/@?]+)/);
+        if (m) return { name: m[1].replace(/\+/g, ' ') };
+        m = decoded.match(/[?&](?:q|query)=([^&]+)/);
+        if (m) return { name: m[1].replace(/\+/g, ' ') };
+        return null;
+    },
+
     showLoading: function() {
         $('#search-results').html('<div class="search-loading"></div>').show();
         $('#search-results .search-loading').text(window.mapText('map_search_searching', 'Searching...'));
